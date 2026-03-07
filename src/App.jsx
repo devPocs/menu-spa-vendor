@@ -25,9 +25,6 @@ function addDays(d, n) {
 }
 
 export default function App() {
-  const [vendorId, setVendorId] = useState(
-    () => localStorage.getItem("vendor.contextUserId") || ""
-  );
   const [startDate, setStartDate] = useState(() => today());
   const [endDate, setEndDate] = useState(() => addDays(today(), 6));
   const [excludeDates, setExcludeDates] = useState([]);
@@ -40,11 +37,6 @@ export default function App() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
-
-  function saveVendorId(val) {
-    setVendorId(val);
-    localStorage.setItem("vendor.contextUserId", val);
-  }
 
   function addExcludeDate() {
     const val = excludeInput.trim();
@@ -95,19 +87,12 @@ export default function App() {
       setUploadError("Please select the filled Excel file.");
       return;
     }
-    if (!vendorId.trim()) {
-      setUploadError("Please enter your Vendor ID.");
-      return;
-    }
     setUploadLoading(true);
     try {
       const form = new FormData();
       form.append("StartDate", formatDateISO(startDate));
       form.append("EndDate", formatDateISO(endDate));
       form.append("UploadedExcelFile", file);
-      form.append("Id", crypto.randomUUID());
-      form.append("ContextUserId", vendorId.trim());
-
       const res = await fetch(`${API_BASE}/api/menus/upload`, {
         method: "POST",
         body: form,
@@ -137,8 +122,6 @@ export default function App() {
     if (dropped) setFile(dropped);
   }, []);
 
-  const isReady = vendorId.trim().length > 0;
-
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="sticky top-0 z-10 backdrop-blur bg-white/80 border-b border-gray-200">
@@ -150,21 +133,6 @@ export default function App() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-
-        {/* Vendor ID */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold mb-1">Vendor ID</h2>
-          <p className="text-sm text-gray-500 mb-3">
-            Enter the unique ID provided to you. It will be saved for future uploads.
-          </p>
-          <input
-            type="text"
-            className="w-full rounded-xl border border-gray-300 px-3 py-2 font-mono text-sm"
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            value={vendorId}
-            onChange={(e) => saveVendorId(e.target.value)}
-          />
-        </section>
 
         {/* Step 1 — Date range + template download */}
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -326,7 +294,7 @@ export default function App() {
 
           <button
             onClick={uploadMenu}
-            disabled={!file || !isReady || uploadLoading}
+            disabled={!file || uploadLoading}
             className="mt-4 w-full rounded-2xl px-4 py-2.5 border border-green-600 bg-green-500 text-white shadow-sm hover:shadow transition disabled:opacity-50 font-medium"
           >
             {uploadLoading ? (
@@ -338,11 +306,7 @@ export default function App() {
               "Upload Menu"
             )}
           </button>
-          {!isReady && (
-            <p className="mt-2 text-xs text-gray-400 text-center">
-              Enter your Vendor ID above to enable upload.
-            </p>
-          )}
+
         </section>
       </main>
     </div>
