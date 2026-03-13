@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 
 const API_BASE = "https://hrapi.dreef.org";
 
@@ -37,6 +37,20 @@ export default function App() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
+
+  const [downloadMenusLoading, setDownloadMenusLoading] = useState(false);
+  const [downloadMenusError, setDownloadMenusError] = useState("");
+
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+
+  function showToast(message) {
+    clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   function addExcludeDate() {
     const val = excludeInput.trim();
@@ -116,6 +130,46 @@ export default function App() {
     }
   }
 
+  async function downloadSelectedMenus() {
+    const validStart = startDate && !isNaN(startDate.getTime());
+    const validEnd = endDate && !isNaN(endDate.getTime());
+    if (!validStart || !validEnd) {
+      showToast("Please select a date range before downloading.");
+      return;
+    }
+    if (startDate > endDate) {
+      showToast("Start date must be before end date.");
+      return;
+    }
+    setDownloadMenusError("");
+    setDownloadMenusLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/menus/download-selected-menus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "*/*" },
+        body: JSON.stringify({
+          startDate: formatDateISO(startDate),
+          endDate: formatDateISO(endDate),
+        }),
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      const filename = match ? match[1].replace(/['"]/g, "") : "SelectedMenus.xlsx";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setDownloadMenusError(e?.message || "Failed to download selected menus.");
+    } finally {
+      setDownloadMenusLoading(false);
+    }
+  }
+
   const handleFileDrop = useCallback((e) => {
     e.preventDefault();
     const dropped = e.dataTransfer.files?.[0];
@@ -152,8 +206,8 @@ export default function App() {
               <input
                 type="date"
                 className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                value={formatDateISO(startDate)}
-                onChange={(e) => setStartDate(fromInputDate(e.target.value))}
+                value={startDate ? formatDateISO(startDate) : ""}
+                onChange={(e) => setStartDate(e.target.value ? fromInputDate(e.target.value) : null)}
               />
             </div>
             <div>
@@ -161,8 +215,8 @@ export default function App() {
               <input
                 type="date"
                 className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                value={formatDateISO(endDate)}
-                onChange={(e) => setEndDate(fromInputDate(e.target.value))}
+                value={endDate ? formatDateISO(endDate) : ""}
+                onChange={(e) => setEndDate(e.target.value ? fromInputDate(e.target.value) : null)}
               />
             </div>
           </div>
@@ -308,7 +362,47 @@ export default function App() {
           </button>
 
         </section>
+        {/* Step 3 — Download selected menus */}
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-white text-sm font-semibold">
+              3
+            </span>
+            <h2 className="font-semibold">Download Selected Menus</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Download the selected menus for the chosen date range.
+          </p>
+
+          {downloadMenusError && (
+            <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm">
+              {downloadMenusError}
+            </div>
+          )}
+
+          <button
+            onClick={downloadSelectedMenus}
+            disabled={downloadMenusLoading}
+            className="w-full rounded-2xl px-4 py-2.5 border border-gray-300 bg-white shadow-sm hover:shadow transition disabled:opacity-50 font-medium"
+          >
+            {downloadMenusLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="animate-spin inline-block border-2 border-gray-400 border-t-transparent rounded-full w-4 h-4" />
+                Downloading…
+              </span>
+            ) : (
+              "Download Selected Menus"
+            )}
+          </button>
+        </section>
+
       </main>
+
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
